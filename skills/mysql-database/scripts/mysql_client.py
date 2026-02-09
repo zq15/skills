@@ -6,9 +6,21 @@ Connects to MySQL and provides database inspection capabilities.
 
 import json
 import sys
+import re
 from typing import Dict, List, Any, Optional
 import pymysql
 from pymysql.cursors import DictCursor
+
+
+def validate_identifier(identifier: str) -> bool:
+    """
+    Validate SQL identifier (table/database name) to prevent SQL injection.
+    Only allows alphanumeric characters, underscores, and hyphens.
+    """
+    if not identifier:
+        return False
+    pattern = r'^[a-zA-Z0-9_-]+$'
+    return bool(re.match(pattern, identifier))
 
 
 class MySQLClient:
@@ -32,8 +44,14 @@ class MySQLClient:
                 cursorclass=DictCursor
             )
             return True
+        except KeyError as e:
+            print(f"Missing required configuration: {e}", file=sys.stderr)
+            return False
+        except pymysql.MySQLError as e:
+            print(f"MySQL connection error: {e}", file=sys.stderr)
+            return False
         except Exception as e:
-            print(f"Connection error: {e}", file=sys.stderr)
+            print(f"Unexpected error during connection: {e}", file=sys.stderr)
             return False
 
     def disconnect(self):
@@ -50,6 +68,8 @@ class MySQLClient:
     def list_tables(self, database: Optional[str] = None) -> List[str]:
         """List all tables in the specified or current database."""
         if database:
+            if not validate_identifier(database):
+                raise ValueError(f"Invalid database name: {database}")
             self.connection.select_db(database)
 
         with self.connection.cursor() as cursor:
@@ -59,7 +79,12 @@ class MySQLClient:
 
     def describe_table(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """Get detailed table structure including columns, indexes, and constraints."""
+        if not validate_identifier(table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+
         if database:
+            if not validate_identifier(database):
+                raise ValueError(f"Invalid database name: {database}")
             self.connection.select_db(database)
 
         result = {
@@ -102,23 +127,21 @@ class MySQLClient:
         return result
 
     def execute_query(self, query: str) -> Dict[str, Any]:
-        """Execute a SELECT query and return results."""
+        """Execute a SELECT query and return results. Only SELECT queries are allowed."""
+        query_stripped = query.strip().upper()
+
+        # Only allow SELECT queries for safety
+        if not query_stripped.startswith('SELECT'):
+            raise ValueError("Only SELECT queries are allowed. For data modifications, use direct database tools.")
+
         with self.connection.cursor() as cursor:
             cursor.execute(query)
-
-            if query.strip().upper().startswith('SELECT'):
-                rows = cursor.fetchall()
-                return {
-                    'rows': rows,
-                    'row_count': len(rows),
-                    'columns': [desc[0] for desc in cursor.description] if cursor.description else []
-                }
-            else:
-                self.connection.commit()
-                return {
-                    'affected_rows': cursor.rowcount,
-                    'message': 'Query executed successfully'
-                }
+            rows = cursor.fetchall()
+            return {
+                'rows': rows,
+                'row_count': len(rows),
+                'columns': [desc[0] for desc in cursor.description] if cursor.description else []
+            }
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -185,6 +208,15 @@ def main():
             print(f"Unknown command: {command}", file=sys.stderr)
             sys.exit(1)
 
+    except ValueError as e:
+        print(f"Validation error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except pymysql.MySQLError as e:
+        print(f"MySQL error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
     finally:
         client.disconnect()
 
