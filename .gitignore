@@ -3,3 +3,7 @@ __pycache__/
 .idea/
 .vscode/
 .claude/
+
+# MySQL configuration files (keep only .example.json in version control)
+**/mysql_config.json
+skills/mysql-database/assets/mysql_config.json
