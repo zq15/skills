@@ -92,3 +92,102 @@ The markdown content below contains the instructions, examples, and guidelines t
 Skills are a great way to teach Claude how to get better at using specific pieces of software. As we see awesome example skills from partners, we may highlight some of them here:
 
 - **Notion** - [Notion Skills for Claude](https://www.notion.so/notiondevs/Notion-Skills-for-Claude-28da4445d27180c7af1df7d8615723d0)
+
+# Tool Call Logging Hooks
+
+This repository includes hooks for recording and analyzing Claude Code tool calls. The hooks automatically log every tool invocation with timing and result information to `~/.claude/tool_calls.log`.
+
+## Installation
+
+### Prerequisites
+
+The hooks require `jq` for JSON processing:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install jq
+
+# macOS
+brew install jq
+```
+
+### Setup
+
+1. Copy the hook scripts to your Claude hooks directory:
+
+```bash
+cp hooks/record-tool-start.sh ~/.claude/hooks/
+cp hooks/record-tool-end.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/record-tool-*.sh
+```
+
+2. Add the hooks to your `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/record-tool-start.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/record-tool-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+3. Restart Claude Code to activate the hooks.
+
+## Usage
+
+Once installed, the hooks will automatically record all tool calls. Use the `tool-log-viewer` skill to analyze the logs:
+
+```bash
+# View overall statistics
+python3 my/tool-log-viewer/scripts/query_logs.py summary
+
+# View recent calls
+python3 my/tool-log-viewer/scripts/query_logs.py recent 10
+
+# Find slow operations (over 1 second)
+python3 my/tool-log-viewer/scripts/query_logs.py slow 1000
+
+# Filter by tool name
+python3 my/tool-log-viewer/scripts/query_logs.py filter Bash
+
+# View detailed information
+python3 my/tool-log-viewer/scripts/query_logs.py detail
+```
+
+## Log Format
+
+Logs are stored as JSON Lines (JSONL) in `~/.claude/tool_calls.log`:
+
+```json
+{"timestamp": "2026-02-11T10:30:45Z", "session_id": "abc123", "tool_name": "Bash", "tool_use_id": "toolu_01ABC...", "duration_ms": 1234.5, "input": {"command": "ls -la"}, "response": {"stdout": "...", "exitCode": 0}}
+```
+
+Each line contains:
+- **timestamp**: ISO 8601 timestamp
+- **session_id**: Unique session identifier
+- **tool_name**: Name of the tool (Bash, Read, Edit, etc.)
+- **tool_use_id**: Unique identifier for this tool invocation
+- **duration_ms**: Execution time in milliseconds
+- **input**: Tool input parameters
+- **response**: Tool execution result
