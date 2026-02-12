@@ -25,6 +25,9 @@ fi
 # 时间戳
 TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
+# 获取当前工作目录
+CURRENT_DIR=$(pwd)
+
 # 日志文件
 LOG_FILE="${HOME}/.claude/tool_calls.log"
 
@@ -34,6 +37,7 @@ LOG_ENTRY=$(jq -cn \
   --arg session_id "$SESSION_ID" \
   --arg tool_name "$TOOL_NAME" \
   --arg tool_use_id "$TOOL_USE_ID" \
+  --arg cwd "$CURRENT_DIR" \
   --argjson duration_ms "$DURATION_MS" \
   --argjson tool_input "$TOOL_INPUT" \
   --argjson tool_response "$TOOL_RESPONSE" \
@@ -43,6 +47,7 @@ LOG_ENTRY=$(jq -cn \
     tool_name: $tool_name,
     tool_use_id: $tool_use_id,
     duration_ms: $duration_ms,
+    cwd: $cwd,
     input: $tool_input,
     response: $tool_response
   }')

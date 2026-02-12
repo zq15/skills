@@ -119,6 +119,7 @@ def show_detail(logs: List[Dict[str, Any]], index: int = -1):
     print(f"Timestamp:    {log.get('timestamp', 'N/A')}")
     print(f"Tool Name:    {log.get('tool_name', 'unknown')}")
     print(f"Duration:     {format_duration(log.get('duration_ms', 0))}")
+    print(f"Working Dir:  {log.get('cwd', 'N/A')}")
     print(f"Session ID:   {log.get('session_id', 'N/A')}")
     print(f"Tool Use ID:  {log.get('tool_use_id', 'N/A')}")
 
@@ -202,6 +203,48 @@ def show_slow_calls(logs: List[Dict[str, Any]], threshold_ms: float = 1000, limi
     print(f"\n{'='*70}\n")
 
 
+def filter_by_project(logs: List[Dict[str, Any]], project_path: str):
+    """Filter logs by project/working directory."""
+    filtered = [log for log in logs if project_path in log.get("cwd", "")]
+
+    if not filtered:
+        print(f"No calls found for project path containing: {project_path}")
+        return
+
+    print(f"\n{'='*70}")
+    print(f"Tool Calls in Project: {project_path} ({len(filtered)} calls)")
+    print(f"{'='*70}\n")
+
+    # Group by working directory
+    by_cwd = defaultdict(list)
+    for log in filtered:
+        cwd = log.get("cwd", "unknown")
+        by_cwd[cwd].append(log)
+
+    for cwd, cwd_logs in sorted(by_cwd.items()):
+        print(f"\nWorking Directory: {cwd}")
+        print(f"{'-'*70}")
+
+        for i, log in enumerate(cwd_logs, 1):
+            timestamp = log.get("timestamp", "N/A")
+            tool = log.get("tool_name", "unknown")
+            duration = log.get("duration_ms", 0)
+
+            print(f"  {i}. [{timestamp}] {tool} - {format_duration(duration)}")
+
+    # Show statistics
+    durations = [log.get("duration_ms", 0) for log in filtered]
+    avg_duration = sum(durations) / len(durations) if durations else 0
+
+    print(f"\n{'='*70}")
+    print(f"Statistics:")
+    print(f"  Total Calls: {len(filtered)}")
+    print(f"  Avg Time:    {format_duration(avg_duration)}")
+    print(f"  Directories: {len(by_cwd)}")
+
+    print(f"\n{'='*70}\n")
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: query_logs.py <command> [options]")
@@ -210,12 +253,14 @@ def main():
         print("  recent [N]           Show recent N tool calls (default: 10)")
         print("  detail [index]       Show detailed info for a call (default: -1, last)")
         print("  filter <tool_name>   Filter calls by tool name")
+        print("  project <path>       Filter calls by project/working directory")
         print("  slow [threshold_ms]  Show slow calls (default: >1000ms)")
         print("\nExamples:")
         print("  query_logs.py summary")
         print("  query_logs.py recent 20")
         print("  query_logs.py detail -2")
         print("  query_logs.py filter Bash")
+        print("  query_logs.py project /root/ai/skills")
         print("  query_logs.py slow 500")
         sys.exit(1)
 
@@ -235,6 +280,11 @@ def main():
             print("Error: filter command requires a tool name")
             sys.exit(1)
         filter_by_tool(logs, sys.argv[2])
+    elif command == "project":
+        if len(sys.argv) < 3:
+            print("Error: project command requires a path")
+            sys.exit(1)
+        filter_by_project(logs, sys.argv[2])
     elif command == "slow":
         threshold = float(sys.argv[2]) if len(sys.argv) > 2 else 1000
         show_slow_calls(logs, threshold)
