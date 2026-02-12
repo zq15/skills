@@ -5,216 +5,324 @@ description: "Automatically review recent code commits, identify security vulner
 
 # Code Review and Issue Creation
 
-Automated workflow to review code commits, identify issues, and track them in GitHub.
+This skill delegates the code review workflow to a specialized subagent that will:
+1. Review code commits for security and quality issues
+2. Identify vulnerabilities and problems
+3. Create detailed GitHub issues with findings
+4. Optionally create fix branches and pull requests
 
-## Quick Start
+## Usage Instructions
 
-1. **Ensure GitHub integration** is configured with appropriate permissions
-2. **Run the review** on the latest commit or specify a commit SHA
-3. **Issues are automatically created** with categorized findings
-4. **Optionally create a fix branch** and submit a PR
+**IMPORTANT:** When this skill is invoked, you MUST immediately use the Task tool to delegate the work to a general-purpose subagent.
 
-## Workflow
+### Step 1: Identify Review Scope
 
-### 1. Review Latest Commit
+From the user's request, determine:
+- **Commit to review** (default: latest commit / HEAD)
+- **Specific commit SHA** (if provided)
+- **Whether to create fixes** (auto-fix mode)
+- **Repository context** (if needed)
 
-View the most recent commit with full diff:
+### Step 2: Launch Subagent
 
-```bash
-git show HEAD
+Use the Task tool with `subagent_type: "general-purpose"` to handle the review workflow:
+
+```
+Task tool parameters:
+- subagent_type: "general-purpose"
+- description: "Review code and create issue"
+- prompt: [See template below]
 ```
 
-This provides:
-- Commit metadata (author, date, message)
-- Full diff of all changes
-- Context for understanding the scope
+### Prompt Template for Subagent
 
-### 2. Perform Security Analysis
+```
+Please perform a comprehensive code review by following this workflow:
 
-Analyze the code changes for common issues:
+## Review Target
+<Specify: "latest commit" or specific commit SHA>
 
-**🔴 Critical Security Issues:**
-- Hardcoded credentials (passwords, API keys, tokens)
-- Exposed secrets in configuration files
-- Sensitive data in version control
+## Workflow Steps
 
-**⚠️ Security Risks:**
-- SQL injection vulnerabilities
-- Command injection risks
-- Insufficient input validation
-- Missing authentication/authorization checks
-- Unsafe deserialization
-- XSS vulnerabilities
+1. **Fetch commit details** using git:
+   ```bash
+   git show HEAD  # or specific commit SHA
+   git show --stat HEAD  # for file list
+   ```
+   This provides commit metadata, full diff, and context.
 
-**📝 Code Quality Issues:**
-- Poor error handling
-- Missing logging
-- Inconsistent documentation
-- Lack of input sanitization
-- Performance concerns
+2. **Analyze code changes** for security and quality issues:
 
-### 3. Create GitHub Issue
+   **🔴 Critical Security Issues (HIGH PRIORITY):**
+   - Hardcoded credentials (passwords, API keys, tokens, secrets)
+   - Real passwords or sensitive data in configuration files
+   - Private keys or certificates committed to repo
+   - Database credentials or connection strings
 
-Document findings in a structured issue:
+   **⚠️ Security Risks (MEDIUM PRIORITY):**
+   - SQL injection vulnerabilities (dynamic query construction)
+   - Command injection risks (shell command composition)
+   - Insufficient input validation
+   - Missing authentication/authorization checks
+   - Unsafe deserialization
+   - Path traversal vulnerabilities
+   - XSS vulnerabilities
 
-```json
-{
-  "title": "Code Review - Commit <SHA> (<subject>)",
-  "body": "## Code Review\n\n### 🔴 Critical Issues\n...\n### ⚠️ Security Risks\n...\n### 📝 Code Quality\n..."
-}
+   **📝 Code Quality Issues (LOW PRIORITY):**
+   - Poor error handling (bare `except` clauses)
+   - Missing or inadequate logging
+   - Lack of input sanitization
+   - Missing documentation
+   - Performance concerns
+   - Code duplication
+
+3. **OPTIONAL: Use Codex for deeper analysis**
+
+   You can invoke the `collaborating-with-codex` skill to get additional insights:
+   - Ask Codex to analyze specific code snippets for security issues
+   - Get recommendations for secure coding patterns
+   - Request code quality feedback
+   - Verify your security findings
+
+   Example:
+   ```
+   Use Skill tool with:
+   skill: "collaborating-with-codex"
+   args: "Review this code for SQL injection vulnerabilities: [code snippet]"
+   ```
+
+4. **Create GitHub issue** with structured findings:
+
+   Use `gh` CLI to create the issue:
+   ```bash
+   gh issue create --title "Code Review - Commit <SHA>: <summary>" --body "$(cat <<'EOF'
+   ## 代码审查报告
+
+   **审查提交:** <commit SHA>
+   **提交信息:** <commit message>
+   **审查日期:** <date>
+
+   ### 🔴 严重安全问题
+
+   <List critical issues with:>
+   - **文件:** path/to/file:line_number
+   - **问题:** Description of the issue
+   - **风险:** Security impact explanation
+   - **建议:** Remediation steps
+
+   ### ⚠️ 安全风险
+
+   <List medium-priority security issues>
+
+   ### 📝 代码质量问题
+
+   <List code quality issues>
+
+   ### 优先级建议
+
+   1. 立即修复所有 🔴 严重安全问题
+   2. 在下一个版本中解决 ⚠️ 安全风险
+   3. 将 📝 代码质量问题加入技术债务清单
+
+   ### 相关资源
+
+   - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+   - [CWE - Common Weakness Enumeration](https://cwe.mitre.org/)
+   EOF
+   )"
+   ```
+
+5. **OPTIONAL: Create fix branch and PR** (if user requested auto-fix):
+
+   - Create branch: `fix/code-review-<short-sha>`
+   - Apply fixes for identified issues
+   - Commit with clear message
+   - Push to remote
+   - Create PR that references the issue
+
+## Important Guidelines
+
+- **Be thorough** - Check every changed file for security issues
+- **Be specific** - Include exact file paths and line numbers
+- **Be actionable** - Provide clear remediation steps
+- **Prioritize** - Focus on security issues first, then quality
+- **Use Codex** - Leverage the `collaborating-with-codex` skill for complex analysis
+- **Confirm before creating** - Ask user before creating the GitHub issue
+
+## Common Security Patterns to Check
+
+**Hardcoded Secrets:**
+- Look for keys: `password`, `secret`, `token`, `api_key`, `private_key`
+- Check if values are real credentials vs placeholders like `"your_password"`
+- Verify `.gitignore` excludes sensitive config files
+
+**SQL Injection:**
+- String interpolation in SQL: `f"SELECT * FROM {table}"`
+- Missing parameterization
+- Lack of identifier validation
+
+**Input Validation:**
+- User input used in: `eval()`, `exec()`, `os.system()`, SQL queries
+- Missing whitelist validation
+- No type checking or sanitization
+
+**Error Handling:**
+- Bare `except:` clauses
+- Swallowed exceptions without logging
+- Generic error messages that leak info
 ```
 
-Issue format:
-- Clear categorization by severity
-- File paths and line numbers
-- Specific problem descriptions
-- Actionable recommendations
-- Priority guidance
+### Example Invocations
 
-### 4. Create Fix Branch (Optional)
+**Example 1: Review latest commit**
+```
+User: "Review the latest commit and create an issue"
 
-If requested, automatically create a remediation branch:
+Your action:
+Use Task tool with:
+  prompt: "Please perform a comprehensive code review... [full template with target: latest commit]"
+```
 
-1. Create branch from main (e.g., `fix/security-issues`)
-2. Apply fixes for identified issues
-3. Commit changes with descriptive message
-4. Push to remote
-5. Create pull request linking to the issue
+**Example 2: Review specific commit**
+```
+User: "Review commit abc123 for security issues"
 
-## Common Issues Detected
+Your action:
+Use Task tool with:
+  prompt: "Please perform a comprehensive code review... [full template with target: commit abc123]"
+```
+
+**Example 3: Review and auto-fix**
+```
+User: "Review latest commit, create issue, and fix the problems"
+
+Your action:
+Use Task tool with:
+  prompt: "Please perform a comprehensive code review... [full template + mention to create fix branch and PR]"
+```
+
+## Security Analysis Categories
+
+### 🔴 Critical Security Issues
+- **Hardcoded credentials** - Real passwords, API keys, tokens
+- **Exposed secrets** - Private keys, certificates in repo
+- **Sensitive data** - Database credentials, connection strings
+
+### ⚠️ Security Risks
+- **SQL injection** - Dynamic query construction without parameterization
+- **Command injection** - Shell command composition with user input
+- **Input validation** - Missing validation for user-facing inputs
+- **Path traversal** - Unsanitized file paths
+- **XSS** - Unescaped output in web contexts
+
+### 📝 Code Quality Issues
+- **Error handling** - Bare `except:` clauses, swallowed exceptions
+- **Logging** - Missing error logging or debug information
+- **Documentation** - Missing docstrings or unclear comments
+- **Performance** - Inefficient algorithms or resource usage
+
+## Detection Patterns
 
 ### Hardcoded Secrets
+```python
+# BAD - Real credential
+{"password": "SuperSecret123!"}
 
-**Problem:**
-```json
-{
-  "password": "SuperSecret123!"
-}
+# GOOD - Placeholder
+{"password": "your_password"}
 ```
 
-**Detection:** Look for keys like `password`, `secret`, `token`, `api_key` with non-placeholder values.
-
-**Fix:** Replace with placeholders in example files, add to `.gitignore`.
+**Detection:** Keys like `password`, `secret`, `token`, `api_key` with non-placeholder values
 
 ### SQL Injection
-
-**Problem:**
 ```python
+# BAD - String interpolation
 cursor.execute(f"SELECT * FROM {table_name}")
+
+# GOOD - Parameterized or validated
+if not validate_identifier(table_name):
+    raise ValueError("Invalid table name")
+cursor.execute(f"SELECT * FROM `{table_name}`")
 ```
 
-**Detection:** String formatting in SQL queries without parameterization.
-
-**Fix:** Use parameterized queries or add input validation.
+**Detection:** String formatting in SQL without parameterization or validation
 
 ### Missing Input Validation
-
-**Problem:**
 ```python
+# BAD - Direct use
 def process(user_input):
-    return eval(user_input)  # Dangerous!
+    return eval(user_input)
+
+# GOOD - Validated
+def process(user_input):
+    if not is_safe(user_input):
+        raise ValueError("Invalid input")
+    return safe_process(user_input)
 ```
 
-**Detection:** User input used without validation in sensitive operations.
+**Detection:** User input in sensitive operations (`eval`, `exec`, `os.system`, SQL)
 
-**Fix:** Whitelist validation, type checking, sanitization.
-
-### Inadequate Error Handling
-
-**Problem:**
+### Poor Error Handling
 ```python
+# BAD - Bare except
 try:
     risky_operation()
 except:
     pass
+
+# GOOD - Specific handling
+try:
+    risky_operation()
+except ValueError as e:
+    logger.error(f"Invalid value: {e}")
+    raise
 ```
 
-**Detection:** Bare `except` clauses, swallowed exceptions.
+**Detection:** Bare `except` clauses, swallowed exceptions
 
-**Fix:** Specific exception handling with logging.
+## Using Codex Skill
 
-## GitHub Integration
+The subagent can leverage `collaborating-with-codex` skill for:
 
-### Required Permissions
+1. **Deep code analysis** - Ask Codex to analyze complex code patterns
+2. **Security validation** - Verify suspected vulnerabilities
+3. **Best practices** - Get recommendations for secure coding
+4. **Code suggestions** - Request alternative implementations
 
+**Example integration:**
+```
+# Within subagent
+Skill tool call:
+  skill: "collaborating-with-codex"
+  args: "Analyze this Python function for SQL injection risks: [paste code]"
+```
+
+## Important Notes
+
+- The subagent has full access to all tools (Bash, Read, Grep, gh CLI, etc.)
+- The subagent can invoke the `collaborating-with-codex` skill for advanced analysis
+- Always confirm with user before creating GitHub issues or PRs
+- Focus on security issues first, then code quality
+- Be specific with file paths and line numbers in findings
+
+## GitHub Integration Notes
+
+**Required permissions:**
 - `issues:write` - Create and update issues
-- `contents:write` - Create branches and push code
-- `pull_requests:write` - Create pull requests
+- `contents:write` - Create branches (if auto-fixing)
+- `pull_requests:write` - Create PRs (if auto-fixing)
 
-### Using the GitHub MCP
-
-The workflow uses GitHub MCP tools:
-
-- `issue_write` - Create issues with findings
-- `create_branch` - Create fix branches
-- `push_files` - Push remediation code
-- `create_pull_request` - Submit PR for review
-
-### Handling Permission Issues
-
-If you encounter 403 errors:
-
-1. Check token permissions in GitHub settings
-2. Regenerate token with required scopes
-3. Update MCP configuration
-4. Retry operations
-
-Alternatively, use SSH for git operations:
+**Using gh CLI:**
 ```bash
-git remote set-url origin git@github.com:user/repo.git
+# Create issue
+gh issue create --title "..." --body "..."
+
+# Create branch
+git checkout -b fix/code-review-abc123
+
+# Create PR
+gh pr create --title "..." --body "Fixes #N"
 ```
-
-## Best Practices
-
-### Review Scope
-
-- Focus on security-critical changes first
-- Review configuration files carefully
-- Check for exposure of sensitive data
-- Verify input validation for user-facing code
-
-### Issue Documentation
-
-- Be specific about file paths and line numbers
-- Explain the security impact clearly
-- Provide actionable remediation steps
-- Prioritize findings by severity
-
-### Remediation
-
-- Fix critical issues immediately
-- Group related fixes in single commits
-- Test changes before creating PR
-- Link PR to the tracking issue
-
-## Example Usage
-
-**Scenario:** Review latest commit and create issue
-
-1. User requests: "Review the latest commit and create an issue"
-2. Tool fetches commit with `git show HEAD`
-3. Analyzes code for vulnerabilities
-4. Creates GitHub issue with structured findings
-5. Reports issue URL to user
-
-**Scenario:** Review, fix, and create PR
-
-1. User requests: "Review latest commit, fix issues, and create PR"
-2. Tool performs code review
-3. Creates tracking issue
-4. Creates fix branch
-5. Applies security fixes
-6. Commits and pushes changes
-7. Creates pull request
-8. Reports PR URL
-
-## Security Notes
-
-- Never commit real credentials, even in review tools
-- Rotate any exposed secrets immediately
-- Consider secrets management tools (Vault, AWS Secrets Manager)
-- Use `.gitignore` to prevent sensitive file commits
-- Enable pre-commit hooks for secret scanning
 
 ## Resources
 
