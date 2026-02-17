@@ -29,6 +29,8 @@ Create a JSON configuration file with your MySQL connection details:
 
 The `database` field is optional. If not specified, you can provide the database name in individual commands.
 
+For first-time connectivity checks (for example, `list-databases`), leave `database` unset to avoid failures when a default schema does not exist.
+
 ## Available Commands
 
 ### List All Databases
