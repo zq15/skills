@@ -54,8 +54,12 @@ class MySQLClient:
 
         with self.connection.cursor() as cursor:
             cursor.execute("SHOW TABLES")
-            key = list(cursor.fetchone().keys())[0] if cursor.rowcount > 0 else None
-            return [row[key] for row in cursor.fetchall()] if key else []
+            rows = cursor.fetchall()
+            if not rows:
+                return []
+
+            key = next(iter(rows[0].keys()))
+            return [row[key] for row in rows]
 
     def describe_table(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """Get detailed table structure including columns, indexes, and constraints."""
@@ -185,6 +189,12 @@ def main():
             print(f"Unknown command: {command}", file=sys.stderr)
             sys.exit(1)
 
+    except pymysql.MySQLError as e:
+        print(f"MySQL error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
     finally:
         client.disconnect()
 

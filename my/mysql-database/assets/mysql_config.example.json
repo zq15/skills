@@ -1,7 +1,6 @@
 {
   "host": "localhost",
   "port": 3306,
-  "user": "root",
-  "password": "Sugon666!",
-  "database": "osdigits_mall"
+  "user": "your_username",
+  "password": "your_password"
 }
