@@ -75,3 +75,24 @@ Most commands support `--json` for structured output. You can use `--jq` to filt
 ```bash
 gh issue list --repo owner/repo --json number,title --jq '.[] | "\(.number): \(.title)"'
 ```
+
+## Creating Issues
+
+`gh issue create` uses GraphQL and may fail with `Resource not accessible by personal access token` even when basic API access works. In that case, fall back to the REST API directly:
+
+```bash
+gh api repos/owner/repo/issues \
+  --method POST \
+  --field title="Issue title" \
+  --field body="Issue body"
+```
+
+Extract the created issue URL from the response:
+
+```bash
+gh api repos/owner/repo/issues \
+  --method POST \
+  --field title="..." \
+  --field body="$(cat draft.md)" \
+  2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('html_url', d))"
+```
