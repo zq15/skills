@@ -156,8 +156,8 @@ def main():
         text = re.sub(r'(?<!\w)\*(.+?)\*(?!\w)', rf'{DIM}\1{RESET}', text)
         # `code` → cyan
         text = re.sub(r'`(.+?)`', rf'{CYAN}\1{RESET}', text)
-        # ### headings → bold (strip leading #s)
-        text = re.sub(r'^#{1,6}\s+', BOLD, text)
+        # ### headings → bold on own line (MULTILINE so ^ matches each line start)
+        text = re.sub(r'^#{1,6}\s+(.+)$', rf'\n{BOLD}\1{RESET}', text, flags=re.MULTILINE)
         return text
 
     def fmt_args(raw: str) -> str:
@@ -170,8 +170,17 @@ def main():
         return result
 
     def fmt_snippet(text: str) -> str:
-        """Collapse text to a single line and convert markdown to ANSI."""
-        return strip_md(" ".join(text.split()))
+        """Convert markdown to ANSI, collapse horizontal whitespace, preserve line breaks."""
+        text = strip_md(text)
+        lines = [' '.join(line.split()) for line in text.splitlines()]
+        return '\n'.join(line for line in lines if line)
+
+    def unwrap_shell(cmd_str: str) -> str:
+        """Extract the innermost command from shell wrappers like /bin/zsh -lc 'bash -lc ...'."""
+        m = re.search(r"""(?:bash|sh|zsh)\s+-\w*c\s+['"](.+?)['"](?:\s*\))?$""", cmd_str)
+        if m:
+            return unwrap_shell(m.group(1))
+        return cmd_str
 
     cmd = ["codex", "exec", "--sandbox", args.sandbox, "--cd", args.cd, "--json"]
 
@@ -254,8 +263,8 @@ def main():
                         prefix = f"{YELLOW}<<{RESET} "
                     progress(f"{DIM}[codex]{RESET} {prefix}{fmt_snippet(str(agg_output))}")
                 elif cmd_str:
-                    # started: show command
-                    progress(f"{DIM}[codex]{RESET} {GREEN}>>{RESET} shell({fmt_snippet(str(cmd_str))})")
+                    # started: show command (unwrap shell wrappers)
+                    progress(f"{DIM}[codex]{RESET} {GREEN}>>{RESET} shell({fmt_snippet(unwrap_shell(str(cmd_str)))})")
             elif item_type == "reasoning":
                 text = item.get("text", "") or item.get("content", "")
                 if text:
