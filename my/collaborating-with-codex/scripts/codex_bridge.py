@@ -113,8 +113,43 @@ def main():
     parser.add_argument("--yolo", action="store_true", help="Run every command without approvals or sandboxing. Only use when `sandbox` couldn't be applied.")
     parser.add_argument("--profile", default="", help="Configuration profile name to load from `~/.codex/config.toml`. This parameter is strictly prohibited unless explicitly specified by the user.")
     parser.add_argument("--timeout", type=int, default=600, help="Maximum execution time in seconds (default: 600s/10min). Set to 0 for no timeout.")
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        default=False,
+        help="Disable real-time progress output to terminal. Use in CI/CD environments."
+    )
 
     args = parser.parse_args()
+
+    _tty = None
+    if not args.no_progress:
+        try:
+            _tty = open("/dev/tty", "w", buffering=1)  # line-buffered
+        except (OSError, FileNotFoundError):
+            _tty = None  # CI/CD or no controlling terminal: silent fallback
+
+    def progress(msg: str) -> None:
+        if _tty is None:
+            return
+        try:
+            _tty.write(msg + "\n")
+            _tty.flush()
+        except OSError:
+            pass  # terminal closed: silently ignore
+
+    def fmt_args(raw: str) -> str:
+        try:
+            parsed = json.loads(raw)
+            parts = [f'{k}={str(v).replace(chr(10), " ")!r}' for k, v in parsed.items()]
+            result = ", ".join(parts)
+        except (json.JSONDecodeError, AttributeError):
+            result = str(raw).replace("\n", " ")
+        return result
+
+    def fmt_snippet(text: str) -> str:
+        """Collapse text to a single line."""
+        return " ".join(text.split())
 
     cmd = ["codex", "exec", "--sandbox", args.sandbox, "--cd", args.cd, "--json"]
 
@@ -145,6 +180,11 @@ def main():
     err_message = ""
     thread_id = None
     timeout_val = None if args.timeout == 0 else args.timeout
+    _session_shown = False
+    _start_time = time.time()
+
+    def elapsed() -> str:
+        return f"{int(time.time() - _start_time)}s"
 
     for line in run_shell_command(cmd, timeout=timeout_val):
         try:
@@ -153,6 +193,7 @@ def main():
 
             # Handle timeout
             if line_dict.get("type") == "timeout":
+                progress(f"[codex] Timed out after {args.timeout}s")
                 success = False
                 err_message = f"[TIMEOUT] Execution exceeded {args.timeout}s limit. "
                 err_message += "Try increasing timeout with --timeout 1200 (20 minutes)."
@@ -163,19 +204,76 @@ def main():
             item = line_dict.get("item", {})
             item_type = item.get("type", "")
             if item_type == "agent_message":
-                agent_messages = agent_messages + item.get("text", "")
+                text = item.get("text", "")
+                agent_messages = agent_messages + text
+                if text:
+                    progress(f"[codex] Responding: {fmt_snippet(text)}")
+                else:
+                    progress("[codex] Responding...")
+            elif item_type == "function_call":
+                name = item.get("name", "?")
+                raw_args = item.get("arguments", "{}")
+                progress(f"[codex] >> {name}({fmt_args(raw_args)})")
+            elif item_type == "function_call_output":
+                output = item.get("output", "") or item.get("content", "") or item.get("result", "")
+                if output:
+                    progress(f"[codex] << {fmt_snippet(str(output))}")
+                else:
+                    progress("[codex] << tool done")
+            elif item_type == "command_execution":
+                cmd_str = item.get("command", "")
+                agg_output = item.get("aggregated_output", "")
+                if agg_output:
+                    # completed: show output
+                    exit_code = item.get("exit_code", "")
+                    prefix = f"<< (exit={exit_code}) " if exit_code else "<< "
+                    progress(f"[codex] {prefix}{fmt_snippet(str(agg_output))}")
+                elif cmd_str:
+                    # started: show command
+                    progress(f"[codex] >> shell({fmt_snippet(str(cmd_str))})")
+            elif item_type == "reasoning":
+                text = item.get("text", "") or item.get("content", "")
+                if text:
+                    progress(f"[codex] Thinking: {fmt_snippet(text)}")
+                else:
+                    progress("[codex] Thinking...")
+            else:
+                # catch-all: print any unrecognized item type
+                if item_type:
+                    snippet = item.get("text", "") or item.get("content", "") or item.get("output", "")
+                    if snippet:
+                        progress(f"[codex] [{item_type}] {fmt_snippet(str(snippet))}")
+                    else:
+                        # dump item keys to help debug unknown item structures
+                        keys = [k for k in item.keys() if k != "type"]
+                        progress(f"[codex] [{item_type}] keys={keys}")
             if line_dict.get("thread_id") is not None:
                 thread_id = line_dict.get("thread_id")
-            if "fail" in line_dict.get("type", ""):
+                if not _session_shown:
+                    progress(f"[codex] Session: {thread_id[:8]}...")
+                    _session_shown = True
+            top_type = line_dict.get("type", "")
+            if top_type == "turn.completed":
+                progress(f"[codex] Done. ({elapsed()})")
+            elif "fail" in top_type:
                 success = False if len(agent_messages) == 0 else success
-                err_message += "\n\n[codex error] " + line_dict.get("error", {}).get("message", "")
-            if "error" in line_dict.get("type", ""):
+                fail_msg = line_dict.get("error", {}).get("message", "")
+                progress(f"[codex] Error: {fail_msg[:60]}")
+                err_message += "\n\n[codex error] " + fail_msg
+            elif "error" in top_type:
                 error_msg = line_dict.get("message", "")
                 is_reconnecting = bool(re.match(r'^Reconnecting\.\.\.\s+\d+/\d+$', error_msg))
 
                 if not is_reconnecting:
                     success = False if len(agent_messages) == 0 else success
+                    progress(f"[codex] Error: {error_msg[:60]}")
                     err_message += "\n\n[codex error] " + error_msg
+            elif top_type and top_type not in ("item.created", "item.updated", "item.completed",
+                                                "item.started",
+                                                "response.created", "response.completed",
+                                                "thread.started", "turn.started"):
+                # catch-all: print unrecognized top-level type for debugging
+                progress(f"[codex] [{top_type}]")
 
         except json.JSONDecodeError:
             err_message += "\n\n[json decode error] " + line
@@ -211,6 +309,12 @@ def main():
         result["all_messages"] = all_messages
 
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    if _tty is not None:
+        try:
+            _tty.close()
+        except OSError:
+            pass
 
 if __name__ == "__main__":
     main()

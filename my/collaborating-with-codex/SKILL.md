@@ -7,10 +7,10 @@ description: Delegates coding tasks to Codex CLI for prototyping, debugging, and
 
 ```bash
 # 基本用法（默认 10 分钟超时）
-python scripts/codex_bridge.py --cd "/path/to/project" --PROMPT "Your task"
+python3 scripts/codex_bridge.py --cd "/path/to/project" --PROMPT "Your task"
 
 # 自定义超时时间（单位：秒）
-python scripts/codex_bridge.py --cd "/path/to/project" --PROMPT "Complex task" --timeout 1200
+python3 scripts/codex_bridge.py --cd "/path/to/project" --PROMPT "Complex task" --timeout 1200
 ```
 
 **Output:** JSON with `success`, `SESSION_ID`, `agent_messages`, and optional `error`.
@@ -21,7 +21,7 @@ python scripts/codex_bridge.py --cd "/path/to/project" --PROMPT "Complex task" -
 
 ```
 usage: codex_bridge.py [-h] --PROMPT PROMPT --cd CD [--sandbox {read-only,workspace-write,danger-full-access}] [--SESSION_ID SESSION_ID] [--skip-git-repo-check]
-                       [--return-all-messages] [--image IMAGE] [--model MODEL] [--yolo] [--profile PROFILE] [--timeout TIMEOUT]
+                       [--return-all-messages] [--image IMAGE] [--model MODEL] [--yolo] [--profile PROFILE] [--timeout TIMEOUT] [--no-progress]
 
 Codex Bridge
 
@@ -43,6 +43,7 @@ options:
   --yolo                Run every command without approvals or sandboxing. Only use when `sandbox` couldn't be applied.
   --profile PROFILE     Configuration profile name to load from `~/.codex/config.toml`. This parameter is strictly prohibited unless explicitly specified by the user.
   --timeout TIMEOUT     Maximum execution time in seconds (default: 600s/10min). Set to 0 for no timeout.
+  --no-progress         Disable real-time progress output to terminal. Use in CI/CD environments.
 ```
 
 ## Multi-turn Sessions
@@ -51,22 +52,22 @@ options:
 
 ```bash
 # Initial task
-python scripts/codex_bridge.py --cd "/project" --PROMPT "Analyze auth in login.py"
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Analyze auth in login.py"
 
 # Continue with SESSION_ID
-python scripts/codex_bridge.py --cd "/project" --SESSION_ID "uuid-from-response" --PROMPT "Write unit tests for that"
+python3 scripts/codex_bridge.py --cd "/project" --SESSION_ID "uuid-from-response" --PROMPT "Write unit tests for that"
 ```
 
 ## Common Patterns
 
 **Prototyping (read-only, request diffs):**
 ```bash
-python scripts/codex_bridge.py --cd "/project" --PROMPT "Generate unified diff to add logging"
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Generate unified diff to add logging"
 ```
 
 **Debug with full trace:**
 ```bash
-python scripts/codex_bridge.py --cd "/project" --PROMPT "Debug this error" --return-all-messages
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Debug this error" --return-all-messages
 ```
 
 ## Timeout Control
@@ -80,13 +81,13 @@ python scripts/codex_bridge.py --cd "/project" --PROMPT "Debug this error" --ret
 
 ```bash
 # Short timeout for quick queries (2 minutes)
-python scripts/codex_bridge.py --cd "/project" --PROMPT "List files" --timeout 120
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "List files" --timeout 120
 
 # Extended timeout for complex tasks (20 minutes)
-python scripts/codex_bridge.py --cd "/project" --PROMPT "Comprehensive refactoring" --timeout 1200
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Comprehensive refactoring" --timeout 1200
 
 # Disable timeout (not recommended)
-python scripts/codex_bridge.py --cd "/project" --PROMPT "Long task" --timeout 0
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Long task" --timeout 0
 ```
 
 ### Handling Timeout Errors
@@ -98,9 +99,36 @@ If you encounter a timeout:
 
 ```bash
 # First attempt times out
-python scripts/codex_bridge.py --cd "/project" --PROMPT "Complex analysis" --timeout 600
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Complex analysis" --timeout 600
 # Returns: {"success": false, "SESSION_ID": "abc-123", "error": "[TIMEOUT] ..."}
 
 # Resume with the same SESSION_ID
-python scripts/codex_bridge.py --cd "/project" --SESSION_ID "abc-123" --PROMPT "Continue the analysis, focus on key areas" --timeout 1200
+python3 scripts/codex_bridge.py --cd "/project" --SESSION_ID "abc-123" --PROMPT "Continue the analysis, focus on key areas" --timeout 1200
 ```
+
+## Progress Output
+
+By default, `codex_bridge.py` writes real-time progress lines directly to `/dev/tty` (the controlling terminal). This output is **not** captured by Claude's Bash tool and therefore adds **zero tokens** to Claude's context.
+
+### Example terminal output
+
+```
+[codex] Session: a3f7b2c1...
+[codex] Thinking...
+[codex] >> shell(cmd='ls -la /src')
+[codex] << tool done
+[codex] >> read_file(path='/src/main.py')
+[codex] << tool done
+[codex] Responding...
+[codex] Done.
+```
+
+### Disabling progress output
+
+Use `--no-progress` in CI/CD pipelines or any non-interactive environment where `/dev/tty` is unavailable or unwanted:
+
+```bash
+python3 scripts/codex_bridge.py --cd "/project" --PROMPT "Task" --no-progress
+```
+
+When there is no controlling terminal (e.g., running inside a pipeline or container), the script detects this automatically and falls back to silent mode without any error.
