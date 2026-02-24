@@ -138,6 +138,28 @@ def main():
         except OSError:
             pass  # terminal closed: silently ignore
 
+    # ANSI escape codes
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    CYAN = "\033[36m"
+    YELLOW = "\033[33m"
+    GREEN = "\033[32m"
+    RED = "\033[31m"
+    RESET = "\033[0m"
+
+    def strip_md(text: str) -> str:
+        """Convert common markdown to ANSI terminal styles."""
+        # **bold** or __bold__ → ANSI bold
+        text = re.sub(r'\*\*(.+?)\*\*', rf'{BOLD}\1{RESET}', text)
+        text = re.sub(r'__(.+?)__', rf'{BOLD}\1{RESET}', text)
+        # *italic* or _italic_ (but not inside words like file_name)
+        text = re.sub(r'(?<!\w)\*(.+?)\*(?!\w)', rf'{DIM}\1{RESET}', text)
+        # `code` → cyan
+        text = re.sub(r'`(.+?)`', rf'{CYAN}\1{RESET}', text)
+        # ### headings → bold (strip leading #s)
+        text = re.sub(r'^#{1,6}\s+', BOLD, text)
+        return text
+
     def fmt_args(raw: str) -> str:
         try:
             parsed = json.loads(raw)
@@ -148,8 +170,8 @@ def main():
         return result
 
     def fmt_snippet(text: str) -> str:
-        """Collapse text to a single line."""
-        return " ".join(text.split())
+        """Collapse text to a single line and convert markdown to ANSI."""
+        return strip_md(" ".join(text.split()))
 
     cmd = ["codex", "exec", "--sandbox", args.sandbox, "--cd", args.cd, "--json"]
 
@@ -193,7 +215,7 @@ def main():
 
             # Handle timeout
             if line_dict.get("type") == "timeout":
-                progress(f"[codex] Timed out after {args.timeout}s")
+                progress(f"{DIM}[codex]{RESET} {RED}Timed out after {args.timeout}s{RESET}")
                 success = False
                 err_message = f"[TIMEOUT] Execution exceeded {args.timeout}s limit. "
                 err_message += "Try increasing timeout with --timeout 1200 (20 minutes)."
@@ -207,58 +229,61 @@ def main():
                 text = item.get("text", "")
                 agent_messages = agent_messages + text
                 if text:
-                    progress(f"[codex] Responding: {fmt_snippet(text)}")
+                    progress(f"{DIM}[codex]{RESET} {BOLD}Responding:{RESET} {fmt_snippet(text)}")
                 else:
-                    progress("[codex] Responding...")
+                    progress(f"{DIM}[codex]{RESET} {BOLD}Responding...{RESET}")
             elif item_type == "function_call":
                 name = item.get("name", "?")
                 raw_args = item.get("arguments", "{}")
-                progress(f"[codex] >> {name}({fmt_args(raw_args)})")
+                progress(f"{DIM}[codex]{RESET} {GREEN}>>{RESET} {name}({fmt_args(raw_args)})")
             elif item_type == "function_call_output":
                 output = item.get("output", "") or item.get("content", "") or item.get("result", "")
                 if output:
-                    progress(f"[codex] << {fmt_snippet(str(output))}")
+                    progress(f"{DIM}[codex]{RESET} {YELLOW}<<{RESET} {fmt_snippet(str(output))}")
                 else:
-                    progress("[codex] << tool done")
+                    progress(f"{DIM}[codex]{RESET} {YELLOW}<<{RESET} {DIM}(no output){RESET}")
             elif item_type == "command_execution":
                 cmd_str = item.get("command", "")
                 agg_output = item.get("aggregated_output", "")
                 if agg_output:
                     # completed: show output
                     exit_code = item.get("exit_code", "")
-                    prefix = f"<< (exit={exit_code}) " if exit_code else "<< "
-                    progress(f"[codex] {prefix}{fmt_snippet(str(agg_output))}")
+                    if exit_code and str(exit_code) != "0":
+                        prefix = f"{RED}<< (exit={exit_code}){RESET} "
+                    else:
+                        prefix = f"{YELLOW}<<{RESET} "
+                    progress(f"{DIM}[codex]{RESET} {prefix}{fmt_snippet(str(agg_output))}")
                 elif cmd_str:
                     # started: show command
-                    progress(f"[codex] >> shell({fmt_snippet(str(cmd_str))})")
+                    progress(f"{DIM}[codex]{RESET} {GREEN}>>{RESET} shell({fmt_snippet(str(cmd_str))})")
             elif item_type == "reasoning":
                 text = item.get("text", "") or item.get("content", "")
                 if text:
-                    progress(f"[codex] Thinking: {fmt_snippet(text)}")
+                    progress(f"{DIM}[codex]{RESET} {DIM}Thinking:{RESET} {fmt_snippet(text)}")
                 else:
-                    progress("[codex] Thinking...")
+                    progress(f"{DIM}[codex]{RESET} {DIM}Thinking...{RESET}")
             else:
                 # catch-all: print any unrecognized item type
                 if item_type:
                     snippet = item.get("text", "") or item.get("content", "") or item.get("output", "")
                     if snippet:
-                        progress(f"[codex] [{item_type}] {fmt_snippet(str(snippet))}")
+                        progress(f"{DIM}[codex]{RESET} {DIM}[{item_type}]{RESET} {fmt_snippet(str(snippet))}")
                     else:
                         # dump item keys to help debug unknown item structures
                         keys = [k for k in item.keys() if k != "type"]
-                        progress(f"[codex] [{item_type}] keys={keys}")
+                        progress(f"{DIM}[codex]{RESET} {DIM}[{item_type}] keys={keys}{RESET}")
             if line_dict.get("thread_id") is not None:
                 thread_id = line_dict.get("thread_id")
                 if not _session_shown:
-                    progress(f"[codex] Session: {thread_id[:8]}...")
+                    progress(f"{DIM}[codex]{RESET} Session: {CYAN}{thread_id[:8]}...{RESET}")
                     _session_shown = True
             top_type = line_dict.get("type", "")
             if top_type == "turn.completed":
-                progress(f"[codex] Done. ({elapsed()})")
+                progress(f"{DIM}[codex]{RESET} {GREEN}Done.{RESET} ({elapsed()})")
             elif "fail" in top_type:
                 success = False if len(agent_messages) == 0 else success
                 fail_msg = line_dict.get("error", {}).get("message", "")
-                progress(f"[codex] Error: {fail_msg[:60]}")
+                progress(f"{DIM}[codex]{RESET} {RED}Error:{RESET} {fail_msg[:60]}")
                 err_message += "\n\n[codex error] " + fail_msg
             elif "error" in top_type:
                 error_msg = line_dict.get("message", "")
@@ -266,7 +291,7 @@ def main():
 
                 if not is_reconnecting:
                     success = False if len(agent_messages) == 0 else success
-                    progress(f"[codex] Error: {error_msg[:60]}")
+                    progress(f"{DIM}[codex]{RESET} {RED}Error:{RESET} {error_msg[:60]}")
                     err_message += "\n\n[codex error] " + error_msg
             elif top_type and top_type not in ("item.created", "item.updated", "item.completed",
                                                 "item.started",
