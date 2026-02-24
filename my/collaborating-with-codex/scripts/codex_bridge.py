@@ -156,8 +156,17 @@ def main():
         text = re.sub(r'(?<!\w)\*(.+?)\*(?!\w)', rf'{DIM}\1{RESET}', text)
         # `code` → cyan
         text = re.sub(r'`(.+?)`', rf'{CYAN}\1{RESET}', text)
-        # ### headings → bold on own line (MULTILINE so ^ matches each line start)
-        text = re.sub(r'^#{1,6}\s+(.+)$', rf'\n{BOLD}\1{RESET}', text, flags=re.MULTILINE)
+        # headings → different styles by level
+        _heading_styles = {
+            1: f'{BOLD}{CYAN}',    # h1: bold cyan
+            2: f'{BOLD}{YELLOW}',  # h2: bold yellow
+            3: f'{BOLD}{GREEN}',   # h3: bold green
+        }
+        def _heading_repl(m):
+            level = len(m.group(1))
+            style = _heading_styles.get(level, BOLD)
+            return f'\n{style}{m.group(2)}{RESET}'
+        text = re.sub(r'^(#{1,6})\s+(.+)$', _heading_repl, text, flags=re.MULTILINE)
         return text
 
     def fmt_args(raw: str) -> str:
