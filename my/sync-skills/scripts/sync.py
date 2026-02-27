@@ -5,7 +5,7 @@ import shutil
 import sys
 from pathlib import Path
 
-SRC = Path("/root/ai/skills/my")
+SRC = Path(__file__).parent.parent.parent
 DST = Path.home() / ".claude/skills"
 
 
