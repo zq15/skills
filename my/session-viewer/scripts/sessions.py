@@ -8,7 +8,17 @@ Usage:
   sessions.py show SESSION_ID [--limit N]
   sessions.py search KEYWORD [--date YYYY-MM-DD]
   sessions.py projects
+  sessions.py tokens SESSION_ID
+  sessions.py cost [--date YYYY-MM-DD] [--project NAME]
 """
+
+# Sonnet 4.x pricing (USD per 1M tokens) — update if pricing changes
+PRICE = {
+    "input":          3.00,
+    "output":        15.00,
+    "cache_write":    3.75,
+    "cache_read":     0.30,
+}
 
 import json
 import sys
@@ -223,6 +233,123 @@ def cmd_search(args):
         print(f"\n--- Found in {found} session(s) ---")
 
 
+def extract_usage(entries: list[dict]) -> dict:
+    """Sum token usage across all assistant turns in a session."""
+    u = {"input": 0, "output": 0, "cache_write": 0, "cache_read": 0, "turns": 0}
+    for e in entries:
+        if e.get("type") != "assistant":
+            continue
+        usage = e.get("message", {}).get("usage")
+        if not usage:
+            continue
+        u["input"]       += usage.get("input_tokens", 0)
+        u["output"]      += usage.get("output_tokens", 0)
+        u["cache_write"] += usage.get("cache_creation_input_tokens", 0)
+        u["cache_read"]  += usage.get("cache_read_input_tokens", 0)
+        u["turns"]       += 1
+    return u
+
+
+def calc_cost(u: dict) -> float:
+    return (
+        u["input"]       / 1_000_000 * PRICE["input"] +
+        u["output"]      / 1_000_000 * PRICE["output"] +
+        u["cache_write"] / 1_000_000 * PRICE["cache_write"] +
+        u["cache_read"]  / 1_000_000 * PRICE["cache_read"]
+    )
+
+
+def fmt_tok(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n/1_000_000:.2f}M"
+    if n >= 1_000:
+        return f"{n/1_000:.1f}K"
+    return str(n)
+
+
+def cache_hit_rate(u: dict) -> str:
+    total_in = u["input"] + u["cache_write"] + u["cache_read"]
+    if total_in == 0:
+        return "N/A"
+    return f"{u['cache_read'] / total_in * 100:.1f}%"
+
+
+def cmd_tokens(args):
+    sessions = load_all_sessions()
+    matches = [s for s in sessions if s["session_id"].startswith(args.session_id)]
+    if not matches:
+        print(f"Session not found: {args.session_id}")
+        sys.exit(1)
+
+    s = matches[0]
+    u = extract_usage(s["entries"])
+    cost = calc_cost(u)
+    total_in = u["input"] + u["cache_write"] + u["cache_read"]
+
+    print(f"Session : {s['session_id']}")
+    print(f"Project : {s['project']}")
+    print(f"Time    : {format_time(s['start_time'])} → {format_time(s['end_time'])}")
+    print(f"Turns   : {u['turns']}")
+    print()
+    print(f"{'Token breakdown':}")
+    print(f"  Input (non-cached) : {fmt_tok(u['input']):>10}   ${u['input']/1e6*PRICE['input']:.4f}")
+    print(f"  Cache write        : {fmt_tok(u['cache_write']):>10}   ${u['cache_write']/1e6*PRICE['cache_write']:.4f}")
+    print(f"  Cache read         : {fmt_tok(u['cache_read']):>10}   ${u['cache_read']/1e6*PRICE['cache_read']:.4f}")
+    print(f"  Output             : {fmt_tok(u['output']):>10}   ${u['output']/1e6*PRICE['output']:.4f}")
+    print(f"  {'─'*40}")
+    print(f"  Total input        : {fmt_tok(total_in):>10}")
+    print(f"  Cache hit rate     : {cache_hit_rate(u):>10}")
+    print(f"  Estimated cost     : {'$' + f'{cost:.4f}':>10}")
+
+
+def cmd_cost(args):
+    sessions = load_all_sessions()
+    if args.date:
+        sessions = filter_by_date(sessions, args.date)
+    if args.project:
+        sessions = filter_by_project(sessions, args.project)
+
+    if not sessions:
+        print("No sessions found.")
+        return
+
+    print(f"{'Time':<12} {'Session':<10} {'Turns':>5} {'CacheHit':>9} {'Input':>8} {'CacheW':>8} {'CacheR':>8} {'Output':>8} {'Cost':>8}")
+    print("-" * 100)
+
+    grand = {"input": 0, "output": 0, "cache_write": 0, "cache_read": 0, "turns": 0}
+    for s in sessions:
+        u = extract_usage(s["entries"])
+        cost = calc_cost(u)
+        for k in grand:
+            grand[k] += u[k]
+        print(
+            f"{format_time(s['start_time']):<12} "
+            f"{s['session_id'][:8]:<10} "
+            f"{u['turns']:>5} "
+            f"{cache_hit_rate(u):>9} "
+            f"{fmt_tok(u['input']):>8} "
+            f"{fmt_tok(u['cache_write']):>8} "
+            f"{fmt_tok(u['cache_read']):>8} "
+            f"{fmt_tok(u['output']):>8} "
+            f"${cost:.4f}"
+        )
+
+    if len(sessions) > 1:
+        grand_cost = calc_cost(grand)
+        print("-" * 100)
+        print(
+            f"{'TOTAL':<12} "
+            f"{len(sessions)} sessions"
+            f"{grand['turns']:>14} "
+            f"{cache_hit_rate(grand):>9} "
+            f"{fmt_tok(grand['input']):>8} "
+            f"{fmt_tok(grand['cache_write']):>8} "
+            f"{fmt_tok(grand['cache_read']):>8} "
+            f"{fmt_tok(grand['output']):>8} "
+            f"${grand_cost:.4f}"
+        )
+
+
 def cmd_projects(args):
     sessions = load_all_sessions()
     from collections import Counter
@@ -253,6 +380,13 @@ def main():
 
     sub.add_parser("projects", help="List all projects with session counts")
 
+    p_tokens = sub.add_parser("tokens", help="Token usage breakdown for a session")
+    p_tokens.add_argument("session_id", help="Session ID prefix")
+
+    p_cost = sub.add_parser("cost", help="Cost analysis across sessions")
+    p_cost.add_argument("--date", help="Filter by date (YYYY-MM-DD)")
+    p_cost.add_argument("--project", help="Filter by project name")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -261,6 +395,8 @@ def main():
         "show": cmd_show,
         "search": cmd_search,
         "projects": cmd_projects,
+        "tokens": cmd_tokens,
+        "cost": cmd_cost,
     }
 
     if args.cmd in dispatch:

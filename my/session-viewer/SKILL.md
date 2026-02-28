@@ -1,6 +1,6 @@
 ---
 name: session-viewer
-description: "View and query Claude Code session history from multiple dimensions: list sessions by date/project, show session messages, search keywords across sessions, or list all projects. Use when the user asks to: view sessions, find a past conversation, search session history, list today's sessions, 查看会话、搜索历史会话、列出今天的会话."
+description: "View and query Claude Code session history from multiple dimensions: list sessions by date/project, show session messages, search keywords across sessions, list all projects, analyze token usage and cache hit rates, estimate session costs. Use when the user asks to: view sessions, find a past conversation, search session history, list today's sessions, check token cost, analyze cache usage, 查看会话、搜索历史会话、列出今天的会话、查看token成本、分析缓存命中率."
 ---
 
 # Session Viewer
@@ -55,6 +55,23 @@ python3 sessions.py search "minGrossProfit" --date 2026-02-28
 python3 sessions.py projects
 ```
 
+### Token usage breakdown (single session)
+```bash
+python3 sessions.py tokens fe75
+```
+Shows per-turn input/output/cache-write/cache-read tokens, cache hit rate, and estimated cost.
+
+### Cost analysis (across sessions)
+```bash
+# All sessions
+python3 sessions.py cost
+
+# Filter by date or project
+python3 sessions.py cost --date 2026-02-28
+python3 sessions.py cost --project lixiang-mall
+```
+Pricing constants (Sonnet 4.x, USD/1M tokens) are defined at the top of the script and can be updated.
+
 ## Usage Instructions
 
 When this skill is invoked:
@@ -65,6 +82,8 @@ When this skill is invoked:
    - "查看某个会话内容" / "show session X" → `show SESSION_ID`
    - "搜索XX关键词" / "search for X" → `search KEYWORD`
    - "有哪些项目" / "list projects" → `projects`
+   - "token用量" / "某会话成本" → `tokens SESSION_ID`
+   - "今天花了多少钱" / "cost analysis" → `cost --date/--project`
 
 2. **Run the command** using Bash tool with full script path:
    ```bash
