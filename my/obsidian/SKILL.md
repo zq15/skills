@@ -57,28 +57,46 @@ On Linux, vault config is at `~/.config/obsidian/obsidian.json` (not `~/Library/
 
 ## obsidian-cli quick start
 
-Pick a default vault (once):
+### Set default vault (once per machine)
 
-- `obsidian-cli set-default "<vault-folder-name>"`
-- `obsidian-cli print-default` / `obsidian-cli print-default --path-only`
+`set-default` 接受 **vault 的绝对路径**（不是 vault 名）：
 
-Search
+```bash
+obsidian-cli set-default "/absolute/path/to/vault"
+# 例：obsidian-cli set-default "/Users/foo/ai/obsidian_note"
+```
 
-- `obsidian-cli search "query"` (note names)
-- `obsidian-cli search-content "query"` (inside notes; shows snippets + lines)
+验证：
+```bash
+obsidian-cli print-default
+obsidian-cli print-default --path-only
+```
 
-Create
+### Search
 
-- `obsidian-cli create "Folder/New note" --content "..." --open`
-- Requires Obsidian URI handler (`obsidian://…`) working (Obsidian installed).
-- Avoid creating notes under "hidden" dot-folders (e.g. `.something/...`) via URI; Obsidian may refuse.
+- `obsidian-cli search "query"` — 按笔记名搜索
+- `obsidian-cli search-content "query"` — 按笔记内容搜索（返回片段 + 行号）
 
-Move/rename (safe refactor)
+### Create — ⚠️ 注意
+
+`obsidian-cli create` **依赖 Obsidian URI 协议**，只有 Obsidian 桌面 App 正在运行时才能实际写入文件。
+
+- **Obsidian 运行中**：`obsidian-cli create "Folder/New note" --content "..." --open`
+- **Obsidian 未运行 / 无 GUI 环境**：命令退出码为 0 但文件不会写入磁盘，**改用 Write 工具直接写 `.md` 文件**：
+
+```python
+# 直接写文件，Obsidian 下次打开时自动识别
+Write(file_path="/absolute/vault/path/Folder/note.md", content="...")
+```
+
+Avoid creating notes under hidden dot-folders (e.g. `.something/...`); Obsidian may refuse.
+
+### Move / rename (safe refactor)
 
 - `obsidian-cli move "old/path/note" "new/path/note"`
-- Updates `[[wikilinks]]` and common Markdown links across the vault (this is the main win vs `mv`).
+- 自动更新 vault 内所有 `[[wikilinks]]` 和 Markdown 链接（这是相比 `mv` 的核心优势）
 
-Delete
+### Delete
 
 - `obsidian-cli delete "path/note"`
 
