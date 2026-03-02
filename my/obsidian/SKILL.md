@@ -51,6 +51,23 @@ Notes
 - Multiple vaults common (iCloud vs `~/Documents`, work/personal, etc.). Don't guess; read config.
 - Avoid writing hardcoded vault paths into scripts; prefer reading the config or using `print-default`.
 
+## Install obsidian-cli on Ubuntu/Linux
+
+`obsidian-cli` has been renamed to `notesmd-cli` and must be built from source (Go required):
+
+```bash
+# Install Go if needed
+sudo apt install golang-go
+
+# Build and install
+git clone https://github.com/yakitrak/notesmd-cli.git
+cd notesmd-cli
+go build -o obsidian-cli .
+sudo install -m 755 obsidian-cli /usr/local/bin/
+```
+
+On Linux, vault config is at `~/.config/obsidian/obsidian.json` (not `~/Library/...`).
+
 ## obsidian-cli quick start
 
 Pick a default vault (once):
