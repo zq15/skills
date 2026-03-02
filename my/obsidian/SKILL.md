@@ -32,6 +32,12 @@ Notes
 - Multiple vaults common (iCloud vs `~/Documents`, work/personal, etc.). Don't guess; read config.
 - Avoid writing hardcoded vault paths into scripts; prefer reading the config or using `print-default`.
 
+## Install obsidian-cli on macOS
+
+```bash
+brew install yakitrak/yakitrak/obsidian-cli
+```
+
 ## Install obsidian-cli on Ubuntu/Linux
 
 `obsidian-cli` has been renamed to `notesmd-cli` and must be built from source (Go required):
