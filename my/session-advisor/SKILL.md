@@ -15,6 +15,8 @@ Run the data collection script:
 python3 ~/.claude/skills/session-advisor/scripts/collect_context.py
 ```
 
+> **Note**: Tool stats and bash command history depend on `~/.claude/tool_calls.log`. If this file is empty or missing, the analysis will rely solely on the current session conversation. To enable tool logging, configure a `PostToolUse` hook in Claude Code settings.
+
 This outputs JSON with:
 - `tool_stats` — tool call frequency and avg duration
 - `recent_bash_commands` — recent shell commands (pattern detection)

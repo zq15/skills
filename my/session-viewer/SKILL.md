@@ -18,57 +18,57 @@ Query Claude Code session history stored in `~/.claude/projects/`.
 ### List sessions
 ```bash
 # All sessions
-python3 sessions.py list
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py list
 
 # Filter by date
-python3 sessions.py list --date 2026-02-28
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py list --date 2026-02-28
 
 # Filter by project name (partial match)
-python3 sessions.py list --project lixiang-mall
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py list --project lixiang-mall
 ```
 
 ### Today's sessions (shortcut)
 ```bash
-python3 sessions.py today
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py today
 ```
 
 ### Show session messages
 ```bash
 # Full session (session_id prefix, min 4 chars)
-python3 sessions.py show fe75
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py show fe75
 
 # Limit to first N messages
-python3 sessions.py show fe75 --limit 10
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py show fe75 --limit 10
 ```
 
 ### Search keyword across sessions
 ```bash
 # Search all sessions
-python3 sessions.py search "物流"
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py search "物流"
 
 # Limit to a specific date
-python3 sessions.py search "minGrossProfit" --date 2026-02-28
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py search "minGrossProfit" --date 2026-02-28
 ```
 
 ### List all projects
 ```bash
-python3 sessions.py projects
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py projects
 ```
 
 ### Token usage breakdown (single session)
 ```bash
-python3 sessions.py tokens fe75
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py tokens fe75
 ```
 Shows per-turn input/output/cache-write/cache-read tokens, cache hit rate, and estimated cost.
 
 ### Cost analysis (across sessions)
 ```bash
 # All sessions
-python3 sessions.py cost
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py cost
 
 # Filter by date or project
-python3 sessions.py cost --date 2026-02-28
-python3 sessions.py cost --project lixiang-mall
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py cost --date 2026-02-28
+python3 ~/.claude/skills/session-viewer/scripts/sessions.py cost --project lixiang-mall
 ```
 Pricing constants (Sonnet 4.x, USD/1M tokens) are defined at the top of the script and can be updated.
 

@@ -79,7 +79,7 @@ def sync():
         dest = DST / skill_dir.name
         if dest.exists():
             shutil.rmtree(dest)
-        shutil.copytree(skill_dir, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+        shutil.copytree(skill_dir, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.skill"))
         synced.append(skill_dir.name)
 
     print(f"Synced {len(synced)} skills to {DST}:")

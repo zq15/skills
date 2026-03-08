@@ -16,17 +16,17 @@ Registers the current project's name, path, and description into the `## Project
 
    Without description:
    ```bash
-   python3 /root/ai/skills/my/register-project/scripts/register.py
+   python3 ~/.claude/skills/register-project/scripts/register.py
    ```
 
    With description:
    ```bash
-   python3 /root/ai/skills/my/register-project/scripts/register.py --desc "项目描述"
+   python3 ~/.claude/skills/register-project/scripts/register.py --desc "项目描述"
    ```
 
    Optional overrides:
    ```bash
-   python3 /root/ai/skills/my/register-project/scripts/register.py \
+   python3 ~/.claude/skills/register-project/scripts/register.py \
      --desc "描述" \
      --name "custom-name" \
      --path "/custom/path"
