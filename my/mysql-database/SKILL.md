@@ -1,6 +1,6 @@
 ---
 name: mysql-database
-description: "Connect to MySQL databases to inspect schemas, explore table structures, and execute queries. Use when Claude needs to: (1) View all databases or tables in a MySQL instance, (2) Examine table structure including columns, data types, indexes, and foreign keys, (3) Execute SELECT queries to retrieve data, (4) Understand database schema and relationships. Works with configuration files for secure credential management."
+description: "Connect to MySQL databases to inspect schemas, explore table structures, and execute queries. Use this skill whenever the user mentions MySQL, database, table structure, SQL queries, or says things like '查一下数据库', '看看这张表', '帮我查个 SQL', 'show me the schema', 'what tables are in the database', 'describe the users table', or any request to explore or query a MySQL database."
 ---
 
 # MySQL Database
@@ -38,7 +38,7 @@ For first-time connectivity checks (for example, `list-databases`), leave `datab
 View all databases accessible with the provided credentials:
 
 ```bash
-python scripts/mysql_client.py config.json list-databases
+python ~/.claude/skills/mysql-database/scripts/mysql_client.py config.json list-databases
 ```
 
 Returns JSON with database names:
@@ -54,10 +54,10 @@ View all tables in a database:
 
 ```bash
 # Use database from config
-python scripts/mysql_client.py config.json list-tables
+python ~/.claude/skills/mysql-database/scripts/mysql_client.py config.json list-tables
 
 # Specify database explicitly
-python scripts/mysql_client.py config.json list-tables my_database
+python ~/.claude/skills/mysql-database/scripts/mysql_client.py config.json list-tables my_database
 ```
 
 Returns JSON with table names:
@@ -73,10 +73,10 @@ Get comprehensive table structure including columns, indexes, and foreign keys:
 
 ```bash
 # Use database from config
-python scripts/mysql_client.py config.json describe-table users
+python ~/.claude/skills/mysql-database/scripts/mysql_client.py config.json describe-table users
 
 # Specify database explicitly
-python scripts/mysql_client.py config.json describe-table users my_database
+python ~/.claude/skills/mysql-database/scripts/mysql_client.py config.json describe-table users my_database
 ```
 
 Returns detailed JSON with:
@@ -118,7 +118,7 @@ Example output:
 Execute SELECT queries to retrieve data:
 
 ```bash
-python scripts/mysql_client.py config.json query "SELECT * FROM users LIMIT 10"
+python ~/.claude/skills/mysql-database/scripts/mysql_client.py config.json query "SELECT * FROM users LIMIT 10"
 ```
 
 Returns JSON with query results:

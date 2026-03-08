@@ -1,6 +1,6 @@
 ---
 name: obsidian
-description: Work with Obsidian vaults (plain Markdown notes) and automate via obsidian-cli.
+description: "Work with Obsidian vaults (plain Markdown notes) and automate via obsidian-cli. Use this skill whenever the user mentions Obsidian, vault, notes, or says things like '在 Obsidian 里创建笔记', '搜一下我的 vault', '帮我写到 Obsidian', '移动这篇笔记', 'create a note', 'search my notes', 'open in Obsidian', or any request to read, write, search, move, or manage Obsidian notes."
 ---
 
 # Obsidian
